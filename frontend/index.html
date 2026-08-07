@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Work Allocation Analyzer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .custom-shadow {
+            box-shadow: 0 4px 20px -2px rgba(17, 24, 39, 0.08), 0 2px 10px -1px rgba(17, 24, 39, 0.04);
+        }
+
+        /* Print Media Styles for Perfect PDF Generation */
+        @media print {
+            body {
+                background-color: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            /* Hide non-report layout elements */
+            nav, 
+            #logged-username, 
+            #user-display, 
+            button, 
+            .btn, 
+            footer, 
+            #auth-view, 
+            .toggle-container, 
+            .toggle-container *, 
+            #rules-modal,
+            .rules-btn-wrapper,
+            .btn-download-container,
+            #dashboard-view > div:first-child,
+            #dashboard-empty,
+            #dashboard-loader,
+            .analysis-mode-btn-container,
+            .print-btn-wrapper {
+                display: none !important;
+            }
+            /* Force-show metadata and executive panels for PDF */
+            #epic-metadata-card,
+            #executive-learnings-card,
+            #analysis-panel {
+                display: block !important;
+            }
+            #epic-metadata-card.hidden,
+            #executive-learnings-card.hidden {
+                display: none !important;
+            }
+            .container {
+                max-width: 100% !important;
+                width: 100% !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            /* Expand scrollable tables fully */
+            .overflow-x-auto {
+                max-height: none !important;
+                overflow: visible !important;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            thead {
+                display: table-header-group;
+            }
+            /* Expand all nested category rows for print */
+            tr[class*='cat-child-'] {
+                display: table-row !important;
+            }
+            /* Page break styling */
+            .chart-section-wrapper {
+                page-break-inside: avoid;
+            }
+            .table-container {
+                page-break-inside: avoid;
+            }
+            /* Grid layouts to simple full-width flow */
+            .grid {
+                display: block !important;
+            }
+            .grid > div {
+                width: 100% !important;
+                margin-bottom: 30px !important;
+                page-break-inside: avoid;
+            }
+            /* Fix canvas height constraint for print */
+            .chart-wrapper, canvas {
+                max-height: 280px !important;
+                width: auto !important;
+                margin: auto !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 py-4 px-6 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg">
+                    <i class="fa-solid fa-chart-pie text-lg"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-lg text-slate-900 tracking-tight">Work Analyzer</span>
+                    <span class="bg-blue-100 text-blue-800 text-xs font-semibold ml-2 px-2.5 py-0.5 rounded">v2.0</span>
+                </div>
+            </div>
+            <div id="user-display" class="hidden flex items-center space-x-4">
+                <span class="text-sm font-medium text-slate-600" id="logged-username"></span>
+                <button onclick="logout()" class="text-sm font-semibold text-red-600 hover:text-red-700 transition">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-8 flex flex-col justify-center items-center">
+
+        <!-- 1. Authentication View -->
+        <div id="auth-view" class="w-full max-w-md bg-white p-8 rounded-2xl border border-slate-200 custom-shadow my-auto">
+            <h2 class="text-2xl font-bold text-slate-900 text-center mb-2">Connect to Jira</h2>
+            <p class="text-slate-500 text-sm text-center mb-6">Enter your credentials. They are kept securely in-memory and never stored on disk.</p>
+            
+            <div id="auth-error" class="hidden bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded mb-4 text-sm flex items-start space-x-2">
+                <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+                <span id="auth-error-msg"></span>
+            </div>
+
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Jira Username</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i class="fa-solid fa-user text-sm"></i>
+                        </span>
+                        <input type="text" id="username" required placeholder="username" 
+                               class="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Jira API Token / Password</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i class="fa-solid fa-key text-sm"></i>
+                        </span>
+                        <input type="password" id="password" required placeholder="Your API token or password" 
+                               class="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition">
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition shadow-md hover:shadow-lg text-sm flex justify-center items-center space-x-2">
+                    <span>Authenticate</span>
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- 2. Dashboard & Controls View -->
+        <div id="dashboard-view" class="hidden w-full space-y-6">
+            
+            <!-- Analysis Mode Tab Selection -->
+            <div class="flex justify-center border-b border-slate-200 pb-px analysis-mode-btn-container">
+                <button id="tab-user" onclick="switchAnalysisMode('user')" class="py-3 px-6 font-bold text-sm border-b-2 border-blue-600 text-blue-600 transition focus:outline-none">
+                    <i class="fa-solid fa-user-clock mr-1.5"></i>User Work Analysis
+                </button>
+                <button id="tab-project" onclick="switchAnalysisMode('project')" class="py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition focus:outline-none">
+                    <i class="fa-solid fa-diagram-project mr-1.5"></i>Project Analysis
+                </button>
+            </div>
+
+            <!-- Controls Card -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 custom-shadow flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div class="flex-grow max-w-lg space-y-3">
+                    <h2 class="text-xl font-bold text-slate-900" id="controls-title">Analyse Work Allocation</h2>
+                    <p class="text-slate-500 text-sm" id="controls-desc">Select a date range to process and categorize your worklogs. Maximum allowed range is 1 month.</p>
+                </div>
+                <div class="flex flex-wrap items-end gap-3 justify-end w-full md:w-auto">
+                    
+                    <!-- User Mode Inputs -->
+                    <div id="user-controls" class="flex gap-3">
+                        <div class="w-36">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
+                            <input type="date" id="start-date" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="w-36">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">End Date</label>
+                            <input type="date" id="end-date" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Project Mode Inputs -->
+                    <div id="project-controls" class="hidden">
+                        <div class="w-60">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Epic Key</label>
+                            <input type="text" id="epic-key" placeholder="e.g. STORESHIP-15121" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <button onclick="triggerAnalysis()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg text-sm transition shadow-md hover:shadow-lg flex items-center space-x-2">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Analyse Allocation</span>
+                    </button>
+                    <button onclick="toggleRulesModal(true)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-lg text-sm transition flex items-center space-x-2 rules-btn-wrapper">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Rules Engine</span>
+                    </button>
+                    <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm transition flex items-center space-x-2 print-btn-wrapper">
+                        <i class="fa-solid fa-print"></i>
+                        <span>Print PDF</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loader -->
+            <div id="dashboard-loader" class="hidden bg-white p-12 rounded-2xl border border-slate-200 custom-shadow flex flex-col justify-center items-center space-y-4">
+                <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="text-slate-600 font-semibold text-sm">Fetching and analyzing data from Jira...</span>
+            </div>
+
+            <!-- 2.1 Project Analysis Metadata section -->
+            <div id="epic-metadata-card" class="hidden bg-white p-6 rounded-2xl border border-slate-200 custom-shadow space-y-4">
+                <div class="border-b border-slate-100 pb-3">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info text-blue-600"></i> Epic/Project Information
+                    </h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                    <div class="space-y-2">
+                        <p><span class="text-slate-400 font-medium">Title:</span> <span id="meta-title" class="font-semibold text-slate-900"></span></p>
+                        <p><span class="text-slate-400 font-medium">Status:</span> <span id="meta-status" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800"></span></p>
+                        <p><span class="text-slate-400 font-medium">Priority:</span> <span id="meta-priority" class="font-semibold text-slate-800"></span></p>
+                    </div>
+                    <div class="space-y-2">
+                        <p><span class="text-slate-400 font-medium">Due Date:</span> <span id="meta-duedate" class="font-medium text-slate-800"></span></p>
+                        <p><span class="text-slate-400 font-medium">Created:</span> <span id="meta-created" class="font-medium text-slate-800"></span></p>
+                        <p><span class="text-slate-400 font-medium">Updated:</span> <span id="meta-updated" class="font-medium text-slate-800"></span></p>
+                    </div>
+                    <div class="space-y-2">
+                        <p><span class="text-slate-400 font-medium">Cost Unit Number:</span> <span id="meta-cost-unit" class="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded"></span></p>
+                        <p><span class="text-slate-400 font-medium">Brodos Project Number:</span> <span id="meta-project-num" class="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded"></span></p>
+                        <div class="flex flex-wrap gap-1 items-center">
+                            <span class="text-slate-400 font-medium mr-1">Labels:</span>
+                            <div id="meta-labels" class="flex flex-wrap gap-1"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Dashboard Panel -->
+            <div id="analysis-panel" class="hidden space-y-6">
+                
+                <!-- Metrics Banner -->
+                <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-2xl shadow-md flex justify-between items-center">
+                    <div class="space-y-1">
+                        <p class="text-blue-100 text-xs font-bold uppercase tracking-wider">Analysis Summary</p>
+                        <h2 class="text-2xl md:text-3xl font-extrabold" id="total-time-banner">0h 0m</h2>
+                    </div>
+                    <div class="p-3 bg-white/10 rounded-xl">
+                        <i class="fa-solid fa-hourglass-half text-3xl"></i>
+                    </div>
+                </div>
+
+                <!-- Executive learnings Panel (Project Analysis Mode Only) -->
+                <div id="executive-learnings-card" class="hidden bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-2xl border border-amber-200 custom-shadow space-y-3">
+                    <h3 class="font-bold text-amber-900 text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-lightbulb text-amber-500 text-xl"></i> Executive Analysis & Learnings
+                    </h3>
+                    <div class="text-sm text-amber-900 space-y-4 leading-relaxed">
+                        <div>
+                            <span class="font-extrabold block text-amber-950 uppercase text-xs tracking-wider mb-1">Major Effort Drivers:</span>
+                            <span id="learnings-drivers">Loading analysis...</span>
+                        </div>
+                        <div>
+                            <span class="font-extrabold block text-amber-950 uppercase text-xs tracking-wider mb-1">Key Recommendations for Efficiency:</span>
+                            <span id="learnings-recommendations">Loading suggestions...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 chart-section-wrapper">
+                    
+                    <!-- Chart 1: Time by Epic (In User mode) / Time by Category (In Epic mode) -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 custom-shadow flex flex-col h-[450px]">
+                        <h3 class="text-sm font-bold text-slate-500 uppercase mb-4 tracking-wider" id="chart-left-title">Time spent by Epic</h3>
+                        <div class="flex-grow flex items-center justify-center min-h-0 relative">
+                            <canvas id="epicChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Chart 2: Time by Activity Type (Both modes, but epic mode shows User Distribution) -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 custom-shadow flex flex-col h-[450px]">
+                        <h3 class="text-sm font-bold text-slate-500 uppercase mb-4 tracking-wider" id="chart-right-title">Time spent by Activity Category</h3>
+                        <div class="flex-grow flex items-center justify-center min-h-0 relative">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Epic & Category Breakdown Tables -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <!-- Table 1: Epics (User mode) or Users (Project mode) -->
+                    <div class="bg-white rounded-2xl border border-slate-200 custom-shadow overflow-hidden flex flex-col justify-between">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                            <h3 class="font-bold text-slate-900" id="table-left-title">Epic Distribution</h3>
+                            <button id="btn-dl-left" onclick="downloadEpicCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1 px-3 rounded-md text-xs transition flex items-center space-x-1.5 btn-download-container">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Download</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[300px] flex-grow">
+                            <table class="w-full text-sm text-left">
+                                <thead id="table-left-head" class="text-xs text-slate-400 uppercase bg-slate-50 sticky top-0">
+                                    <!-- Dynamic headers -->
+                                </thead>
+                                <tbody id="epic-table-body">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Table 2: Categories (Both modes) -->
+                    <div class="bg-white rounded-2xl border border-slate-200 custom-shadow overflow-hidden flex flex-col justify-between">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                            <h3 class="font-bold text-slate-900">Activity Category Distribution</h3>
+                            <button onclick="downloadCategoryCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1 px-3 rounded-md text-xs transition flex items-center space-x-1.5 btn-download-container">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Download</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[300px] flex-grow">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-400 uppercase bg-slate-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-5 py-3">Category</th>
+                                        <th class="px-5 py-3 text-right">Time Spent</th>
+                                        <th class="px-5 py-3 text-right">Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="category-table-body">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Detailed Issue / Nested Category Table -->
+                <div class="bg-white rounded-2xl border border-slate-200 custom-shadow overflow-hidden">
+                    <div class="p-5 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
+                        <h3 class="font-bold text-slate-900" id="table-detailed-title">Detailed Issue Level Breakdown</h3>
+                        <div class="flex space-x-2 btn-download-container">
+                            <button onclick="downloadDetailedWorklogsCSV()" class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-1.5 px-3 rounded-md text-xs transition flex items-center space-x-1.5">
+                                <i class="fa-solid fa-file-csv"></i>
+                                <span>Download Worklog Details</span>
+                            </button>
+                            <button onclick="downloadIssueCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1.5 px-3 rounded-md text-xs transition flex items-center space-x-1.5">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Download</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto max-h-[600px]">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-400 uppercase bg-slate-50 sticky top-0" id="detailed-table-head">
+                                <!-- Dynamic headers -->
+                            </thead>
+                            <tbody id="issue-table-body">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Empty State / Welcome state -->
+            <div id="dashboard-empty" class="bg-white p-12 rounded-2xl border border-slate-200 custom-shadow text-center space-y-4">
+                <div class="text-slate-300">
+                    <i class="fa-solid fa-wand-magic-sparkles text-6xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-900">Ready to Analyse</h3>
+                <p class="text-slate-500 max-w-md mx-auto text-sm" id="empty-state-desc">Select the date range above and click "Analyse Allocation" to fetch and aggregate your Jira worklog metrics.</p>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- 3. Rules Engine Management Modal -->
+    <div id="rules-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl custom-shadow overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Rules Engine Configuration</h3>
+                    <p class="text-slate-500 text-xs mt-0.5">Customize categories and keywords used to parse your worklog comment texts.</p>
+                </div>
+                <button onclick="toggleRulesModal(false)" class="text-slate-400 hover:text-slate-600 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto flex-grow space-y-6" id="rules-list-container">
+                <!-- Dynamic Rules and Keywords lists -->
+            </div>
+
+            <div class="p-6 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                <button onclick="addNewCategory()" class="text-blue-600 hover:text-blue-700 font-semibold text-sm flex items-center space-x-1">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add Category</span>
+                </button>
+                <div class="flex space-x-3">
+                    <button onclick="toggleRulesModal(false)" class="px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-100 transition">Cancel</button>
+                    <button onclick="saveRules()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition shadow-md hover:shadow-lg flex items-center space-x-1">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Save Rules</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400 mt-auto">
+        <div class="max-w-7xl mx-auto px-6">
+            &copy; 2026 Jira Work Distribution Analyzer. Designed for Repeatable and Consistent Work Allocation Auditing.
+        </div>
+    </footer>
+
+    <!-- Frontend Script file -->
+    <script src="/static/app.js?v=2"></script>
+</body>
+</html>
