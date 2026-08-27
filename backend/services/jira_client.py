@@ -24,8 +24,18 @@ class JiraClient:
             print(f"Connection test failed: {e}")
             return False
 
-    def fetch_issues_with_worklogs(self, start_date, end_date):
-        jql = f'worklogAuthor = "{self.username}" AND worklogDate >= "{start_date}" AND worklogDate <= "{end_date}"'
+    def search_users(self, query):
+        if not self.test_connection():
+            raise Exception("Authentication failed. Please verify your Jira username and API Token.")
+        search_url = f"{self.base_url}/rest/api/2/user/search"
+        resp = requests.get(search_url, headers=self.headers, auth=self.auth, params={"username": query}, timeout=10)
+        if resp.status_code != 200:
+            raise Exception(f"Failed to search Jira users: {resp.text}")
+        return resp.json()
+
+    def fetch_issues_with_worklogs(self, start_date, end_date, target_user=None):
+        user_to_query = target_user if target_user else self.username
+        jql = f'worklogAuthor = "{user_to_query}" AND worklogDate >= "{start_date}" AND worklogDate <= "{end_date}"'
         search_url = f"{self.base_url}/rest/api/2/search"
         
         issues = []
@@ -197,11 +207,12 @@ class JiraClient:
                     
         return "Pure Implementation / Coding"
 
-    def analyze_worklogs(self, start_date, end_date):
+    def analyze_worklogs(self, start_date, end_date, target_user=None):
         if not self.test_connection():
             raise Exception("Authentication failed. Please verify your Jira username and API Token.")
             
-        issues = self.fetch_issues_with_worklogs(start_date, end_date)
+        user_to_analyze = target_user if target_user else self.username
+        issues = self.fetch_issues_with_worklogs(start_date, end_date, target_user=user_to_analyze)
         
         resolved_parent_epics = {}
         epic_cache = {}
@@ -237,7 +248,7 @@ class JiraClient:
                 for wl in worklogs:
                     author_name = wl.get("author", {}).get("name")
                     started = wl.get("started", "")
-                    if author_name == self.username and start_date <= started[:10] <= end_date:
+                    if author_name == user_to_analyze and start_date <= started[:10] <= end_date:
                         time_spent_sec = wl.get("timeSpentSeconds", 0)
                         comment = wl.get("comment", "")
                         

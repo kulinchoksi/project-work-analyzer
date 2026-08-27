@@ -6,6 +6,7 @@ class AnalyzeRequest(BaseModel):
     password: str = Field(..., description="Jira password or API token")
     startDate: str = Field(..., description="Start date (YYYY-MM-DD)")
     endDate: str = Field(..., description="End date (YYYY-MM-DD)")
+    targetUser: Optional[str] = Field(None, description="Optional target Jira username to analyze")
 
 class AnalyzeEpicRequest(BaseModel):
     username: str = Field(..., description="Jira username")

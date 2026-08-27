@@ -21,11 +21,20 @@ app.add_middleware(
 
 categorizer = Categorizer()
 
+@app.get("/api/users/search")
+def search_users(query: str, username: str, password: str):
+    try:
+        client = JiraClient(username=username, password=password)
+        users = client.search_users(query)
+        return users
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 def analyze_worklogs(req: AnalyzeRequest):
     try:
         client = JiraClient(username=req.username, password=req.password)
-        result = client.analyze_worklogs(req.startDate, req.endDate)
+        result = client.analyze_worklogs(req.startDate, req.endDate, target_user=req.targetUser)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

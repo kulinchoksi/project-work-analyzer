@@ -190,7 +190,17 @@
                 <div class="flex flex-wrap items-end gap-3 justify-end w-full md:w-auto">
                     
                     <!-- User Mode Inputs -->
-                    <div id="user-controls" class="flex gap-3">
+                    <div id="user-controls" class="flex gap-3 items-end">
+                        <div class="relative w-56">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Jira User</label>
+                            <input type="text" id="target-user-search" placeholder="Search user..." autocomplete="off" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                            <!-- Hidden input to store the actual selected username -->
+                            <input type="hidden" id="target-username">
+                            <!-- Dropdown list -->
+                            <div id="user-search-dropdown" class="hidden absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg z-50 text-sm">
+                                <!-- Dynamic options loaded here -->
+                            </div>
+                        </div>
                         <div class="w-36">
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
                             <input type="date" id="start-date" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">

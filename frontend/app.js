@@ -24,7 +24,69 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Load categorization rules from backend
     loadRules();
+    
+    // Setup searchable user dropdown
+    setupUserSearch();
 });
+
+let userSearchTimeout = null;
+
+function setupUserSearch() {
+    const searchInput = document.getElementById("target-user-search");
+    const dropdown = document.getElementById("user-search-dropdown");
+    const targetUsernameInput = document.getElementById("target-username");
+
+    if (!searchInput || !dropdown || !targetUsernameInput) return;
+
+    searchInput.addEventListener("input", () => {
+        const query = searchInput.value.trim();
+        if (userSearchTimeout) clearTimeout(userSearchTimeout);
+
+        if (!query) {
+            dropdown.innerHTML = "";
+            dropdown.classList.add("hidden");
+            targetUsernameInput.value = "";
+            return;
+        }
+
+        userSearchTimeout = setTimeout(() => {
+            fetch(`/api/users/search?query=${encodeURIComponent(query)}&username=${encodeURIComponent(jiraCredentials.username)}&password=${encodeURIComponent(jiraCredentials.password)}`)
+            .then(resp => {
+                if (!resp.ok) throw new Error("Search failed");
+                return resp.json();
+            })
+            .then(users => {
+                dropdown.innerHTML = "";
+                if (users && users.length > 0) {
+                    dropdown.classList.remove("hidden");
+                    users.forEach(user => {
+                        const div = document.createElement("div");
+                        div.className = "px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-b-0 text-slate-700";
+                        div.textContent = `${user.displayName || user.name} (${user.name})`;
+                        div.addEventListener("click", () => {
+                            searchInput.value = user.displayName || user.name;
+                            targetUsernameInput.value = user.name;
+                            dropdown.classList.add("hidden");
+                        });
+                        dropdown.appendChild(div);
+                    });
+                } else {
+                    dropdown.classList.add("hidden");
+                }
+            })
+            .catch(err => {
+                console.error("User search error:", err);
+            });
+        }, 300); // 300ms debounce
+    });
+
+    // Close dropdown on clicking outside
+    document.addEventListener("click", (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.add("hidden");
+        }
+    });
+}
 
 // ─── View Switching ──────────────────────────────────────────────────────────
 
@@ -136,6 +198,8 @@ function handleLogin(event) {
         if (resp.ok) {
             jiraCredentials.username = usernameInput;
             jiraCredentials.password = passwordInput;
+            document.getElementById("target-user-search").value = usernameInput;
+            document.getElementById("target-username").value = usernameInput;
             showView("dashboard");
         } else {
             const err = await resp.json();
@@ -166,6 +230,15 @@ function logout() {
 function analyzeWorklogs() {
     const start = document.getElementById("start-date").value;
     const end = document.getElementById("end-date").value;
+    let targetUser = document.getElementById("target-username").value.trim();
+    if (!targetUser) {
+        const searchText = document.getElementById("target-user-search").value.trim();
+        if (searchText) {
+            targetUser = searchText;
+        } else {
+            targetUser = jiraCredentials.username;
+        }
+    }
 
     if (!start || !end) {
         alert("Please select both a start date and an end date.");
@@ -195,7 +268,8 @@ function analyzeWorklogs() {
             username: jiraCredentials.username,
             password: jiraCredentials.password,
             startDate: start,
-            endDate: end
+            endDate: end,
+            targetUser: targetUser
         })
     })
     .then(async resp => {
