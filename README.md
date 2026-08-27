@@ -105,21 +105,21 @@ The application includes a containerized build compatible with both **Podman** a
 2. **Run Container (Editable/Development Mode with Local Volumes):**
    To make the code fully editable without having to rebuild the image and recreate the container every time, mount your local project directory into the container using a volume. This pairs with Uvicorn's hot-reloader to instantly apply any changes.
 
-   - **Windows Command Prompt (cmd):**
-     - **Podman:** `podman run -d -p 8000:8000 --name work-analyzer-app -v "%cd%":/app work-analyzer`
-     - **Docker:** `docker run -d -p 8000:8000 --name work-analyzer-app -v "%cd%":/app work-analyzer`
+    - **Windows Command Prompt (cmd):**
+      - **Podman:** `podman run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app -v "%cd%":/app work-analyzer`
+      - **Docker:** `docker run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app -v "%cd%":/app work-analyzer`
 
-   - **Windows PowerShell:**
-     - **Podman:** `podman run -d -p 8000:8000 --name work-analyzer-app -v "${PWD}:/app" work-analyzer`
-     - **Docker:** `docker run -d -p 8000:8000 --name work-analyzer-app -v "${PWD}:/app" work-analyzer`
+    - **Windows PowerShell:**
+      - **Podman:** `podman run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app -v "${PWD}:/app" work-analyzer`
+      - **Docker:** `docker run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app -v "${PWD}:/app" work-analyzer`
 
-   - **Linux / macOS (Terminal):**
-     - **Podman:** `podman run -d -p 8000:8000 --name work-analyzer-app -v "$(pwd)":/app:z work-analyzer`
-     - **Docker:** `docker run -d -p 8000:8000 --name work-analyzer-app -v "$(pwd)":/app work-analyzer`
+    - **Linux / macOS (Terminal):**
+      - **Podman:** `podman run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app -v "$(pwd)":/app:z work-analyzer`
+      - **Docker:** `docker run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app -v "$(pwd)":/app work-analyzer`
 
 3. **Standard Run Container (Production Mode):**
-   - **Podman:** `podman run -d -p 8000:8000 --name work-analyzer-app work-analyzer`
-   - **Docker:** `docker run -d -p 8000:8000 --name work-analyzer-app work-analyzer`
+    - **Podman:** `podman run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app work-analyzer`
+    - **Docker:** `docker run -d --restart unless-stopped -p 8000:8000 --name work-analyzer-app work-analyzer`
 
 3. Access the web app at `http://localhost:8000`.
 

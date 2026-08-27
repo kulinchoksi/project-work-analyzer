@@ -27,6 +27,17 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Setup searchable user dropdown
     setupUserSearch();
+
+    // Restore persisted session if available
+    const savedUser = localStorage.getItem("jiraUsername");
+    const savedPass = localStorage.getItem("jiraPassword");
+    if (savedUser && savedPass) {
+        jiraCredentials.username = savedUser;
+        jiraCredentials.password = savedPass;
+        document.getElementById("target-user-search").value = savedUser;
+        document.getElementById("target-username").value = savedUser;
+        showView("dashboard");
+    }
 });
 
 let userSearchTimeout = null;
@@ -198,6 +209,8 @@ function handleLogin(event) {
         if (resp.ok) {
             jiraCredentials.username = usernameInput;
             jiraCredentials.password = passwordInput;
+            localStorage.setItem("jiraUsername", usernameInput);
+            localStorage.setItem("jiraPassword", passwordInput);
             document.getElementById("target-user-search").value = usernameInput;
             document.getElementById("target-username").value = usernameInput;
             showView("dashboard");
@@ -217,6 +230,8 @@ function handleLogin(event) {
 function logout() {
     jiraCredentials.username = "";
     jiraCredentials.password = "";
+    localStorage.removeItem("jiraUsername");
+    localStorage.removeItem("jiraPassword");
     userAnalysisData = null;
     projectAnalysisData = null;
     currentAnalysisData = null;
